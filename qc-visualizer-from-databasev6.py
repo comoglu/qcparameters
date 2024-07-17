@@ -36,7 +36,7 @@ from PyQt5.QtWidgets import (
     QScrollArea, QTableView
 )
 from PyQt5.QtCore import (
-    Qt, QDateTime, QThread, pyqtSignal, QTimer, QPointF, QSortFilterProxyModel
+    Qt, QDateTime, QThread, pyqtSignal, QTimer, QPointF, QSortFilterProxyModel, QSortFilterProxyModel, QVariant
 )
 from PyQt5.QtGui import (
     QColor, QPainter, QPen, QPolygonF, QStandardItemModel, QStandardItem
@@ -96,7 +96,20 @@ class DataFetchThread(QThread):
         except Exception as e:
             self.error_occurred.emit(str(e))
 
-
+    class CustomSortProxyModel(QSortFilterProxyModel):
+        def lessThan(self, left, right):
+            left_data = self.sourceModel().data(left, Qt.UserRole)
+            right_data = self.sourceModel().data(right, Qt.UserRole)
+            
+            if isinstance(left_data, QVariant) and left_data.isNull():
+                return False
+            if isinstance(right_data, QVariant) and right_data.isNull():
+                return True
+            
+            if isinstance(left_data, (int, float)) and isinstance(right_data, (int, float)):
+                return left_data < right_data
+            
+            return super().lessThan(left, right)
 
 class ColorMarkerLabel(QLabel):
     def __init__(self, color, marker, size=20):
@@ -1095,20 +1108,22 @@ class SeisCompGUI(QWidget):
                     count = params[param]['count']
                     if avg is not None:
                         avg_item = QStandardItem(f"{avg:.4f}")
-                        avg_item.setData(avg, Qt.UserRole)  # For sorting
+                        avg_item.setData(avg, Qt.UserRole)
                     else:
                         avg_item = QStandardItem("N/A")
-                        avg_item.setData(-1, Qt.UserRole)  # For sorting
+                        avg_item.setData(QVariant(), Qt.UserRole)
                     count_item = QStandardItem(str(count))
+                    count_item.setData(count, Qt.UserRole)
                 else:
                     avg_item = QStandardItem("N/A")
-                    avg_item.setData(-1, Qt.UserRole)  # For sorting
+                    avg_item.setData(QVariant(), Qt.UserRole)
                     count_item = QStandardItem("0")
+                    count_item.setData(0, Qt.UserRole)
                 row_items.extend([avg_item, count_item])
             model.appendRow(row_items)
 
-        # Create a proxy model for sorting
-        proxy_model = QSortFilterProxyModel()
+        # Create a custom proxy model for sorting
+        proxy_model = CustomSortProxyModel()
         proxy_model.setSourceModel(model)
 
         # Create a QTableView and set its model to the proxy model
